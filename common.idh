@@ -1,0 +1,192 @@
+/*
+ * common.idc -- Common functions for my IDC scripts
+ *
+ * Copyright (C) Youness Alaoui (KaKaRoTo)
+ *
+ * This software is distributed under the terms of the GNU General Public
+ * License ("GPL") version 3, as published by the Free Software Foundation.
+ *
+ */
+
+#include <idc.idc>
+
+#include "fnids.idh"
+
+static CreateStructure(name) {
+  auto id;
+
+  Message(form("Creating structure %s\n", name));
+
+  id = GetStrucIdByName(name);
+  if (id != -1) {
+    Message(form("Structure %s already exists. Renaming it\n", name));
+    if (SetStrucName(id, form("%s_renamed", name)) == 0) {
+      Message(form("Structure %s_renamed already exists. deleting existing structure\n", name));
+      DelStruc(id);
+    }
+    id = -1;
+  }
+  id = AddStrucEx(-1, name, 0);
+  if (id == -1) {
+    Message (form("Error creating %s structure\n", name));
+    return 0;
+  }
+
+  return id;
+}
+
+
+static CreateOpdStructure(void) {
+  auto id;
+
+  id = CreateStructure("OPD_s");
+  AddStrucMember(id, "sub", 0x00, FF_DWRD | FF_0OFF, 0, 4);
+  AddStrucMember(id, "toc", 0x04, FF_DWRD | FF_0OFF, 0, 4);
+
+  return 1;
+}
+
+
+static CreateOpd (toc_addr) {
+  auto ea, func;
+
+  CreateOpdStructure();
+
+  Message("Defining OPD section entries\n");
+
+  ea = toc_addr - 0x8000;
+  /* Find last OPD entry */
+  while (ea != BADADDR && Dword(ea - 0x04) != toc_addr) {
+    ea = ea - 0x04;
+  }
+
+  while (ea != BADADDR && Dword(ea - 0x04) == toc_addr) {
+    ea = ea - 0x08;
+    MakeUnknown(ea, 0x08, DOUNK_SIMPLE);
+    MakeStructEx (ea, 0x08, "OPD_s");
+    func = Dword(ea);
+    MakeFunction(func, BADADDR);
+  }
+
+  return ea;
+}
+
+static CreateExportStructure(void) {
+  auto id;
+
+  id = CreateStructure("ExportStub_s");
+  AddStrucMember(id, "ssize", 0x00, FF_WORD, 0, 2);
+  AddStrucMember(id, "header1", 0x02, FF_WORD, 0, 2);
+  AddStrucMember(id, "header2", 0x04, FF_WORD, 0, 2);
+  AddStrucMember(id, "exports", 0x06, FF_WORD, 0, 2);
+  AddStrucMember(id, "zero1", 0x08, FF_DWRD, 0, 4);
+  AddStrucMember(id, "zero2", 0x0C, FF_DWRD, 0, 4);
+  AddStrucMember(id, "noname", 0x10, FF_DWRD | FF_0OFF, 0, 4);
+  AddStrucMember(id, "fnid", 0x14, FF_DWRD | FF_0OFF, 0, 4);
+  AddStrucMember(id, "stub", 0x18, FF_DWRD | FF_0OFF, 0, 4);
+
+  return 1;
+}
+
+
+static CreateImportStructure(void) {
+  auto id;
+
+  id = CreateStructure("ImportStub_s");
+  AddStrucMember(id, "ssize", 0x00, FF_WORD, 0, 2);
+  AddStrucMember(id, "header1", 0x02, FF_WORD, 0, 2);
+  AddStrucMember(id, "header2", 0x04, FF_WORD, 0, 2);
+  AddStrucMember(id, "imports", 0x06, FF_WORD, 0, 2);
+  AddStrucMember(id, "zero1", 0x08, FF_DWRD, 0, 4);
+  AddStrucMember(id, "zero2", 0x0C, FF_DWRD, 0, 4);
+  AddStrucMember(id, "name", 0x10, FF_DWRD | FF_0OFF, 0, 4);
+  AddStrucMember(id, "fnid", 0x14, FF_DWRD | FF_0OFF, 0, 4);
+  AddStrucMember(id, "stub", 0x18, FF_DWRD | FF_0OFF, 0, 4);
+  AddStrucMember(id, "zero3", 0x1C, FF_DWRD, 0, 4);
+  AddStrucMember(id, "zero4", 0x20, FF_DWRD, 0, 4);
+  AddStrucMember(id, "zero5", 0x24, FF_DWRD, 0, 4);
+  AddStrucMember(id, "zero6", 0x28, FF_DWRD, 0, 4);
+
+  return 1;
+}
+
+
+static CreateImports(import_start, import_end) {
+  auto i, ea, imports, name_ptr, name, fnid_ptr, fnid, stub_ptr, stub;
+  auto fnid_name, fnid_comment;
+  
+  Message("Defining Import stubs\n");
+  for (ea = import_start; ea < import_end; ea = ea + 0x2C) {
+    MakeUnknown(ea, 0x2C, DOUNK_SIMPLE);
+    MakeStructEx (ea, 0x2C, "ImportStub_s");
+
+    imports = Word(ea + 0x06);
+
+    name_ptr = Dword(ea + 0x10);
+    MakeStr(name_ptr, BADADDR);
+    name = GetString(name_ptr, -1, ASCSTR_C);
+
+    fnid_ptr = Dword(ea + 0x14);
+    MakeName(fnid_ptr,  form("FNIDTable_%s", name));
+    stub_ptr = Dword(ea + 0x18);
+    MakeName(stub_ptr,  form("StubTable_%s", name));
+    for (i = 0; i < imports; i++) {
+      MakeDword(fnid_ptr + (i*4));
+      fnid = Dword(fnid_ptr + (i*4));
+      fnid_name = get_fnid_name(name, fnid);
+      MakeComm(fnid_ptr + (i*4),  form("Import %s (%d): FNID 0x%X : %s", name, i, fnid, fnid_name));
+
+      MakeDword(stub_ptr + (i*4));
+      OpOff (stub_ptr + (i*4), 0, 0);
+      stub = Dword(stub_ptr + (i*4));
+      MakeFunction(stub, BADADDR);
+      MakeName(stub,  form("_%s_%s", name, fnid_name));
+      fnid_comment = get_fnid_comment(name, fnid);
+      if (fnid_comment != "") 
+	SetFunctionCmt(stub, fnid_comment, 1);
+    }
+  }
+}
+
+
+static CreateExports(export_start, export_end) {
+  auto i, ea, exports, name_ptr, name, fnid_ptr, fnid, stub_ptr, stub_opd, stub;
+  auto fnid_name, fnid_comment;
+  
+  Message("Defining Export stubs\n");
+  for (ea = export_start; ea < export_end; ea = ea + 0x1c) {
+    MakeUnknown(ea, 0x1c, DOUNK_SIMPLE);
+    MakeStructEx (ea, 0x1c, "ExportStub_s");
+
+    exports = Word(ea + 0x06);
+    name_ptr = Dword(ea + 0x10);
+    if (name_ptr == 0) {
+      name = "";
+    } else {
+      MakeStr(name_ptr, BADADDR);
+      name = GetString(name_ptr, -1, ASCSTR_C);
+    }
+
+    fnid_ptr = Dword(ea + 0x14);
+    MakeName(fnid_ptr,  form("ExportFNIDTable_%s", name));
+    stub_ptr = Dword(ea + 0x18);
+    MakeName(stub_ptr,  form("ExportStubTable_%s", name));
+    for (i = 0; i < exports; i++) {
+      MakeDword(fnid_ptr + (i*4));
+      fnid = Dword(fnid_ptr + (i*4));
+      fnid_name = get_fnid_name(name, fnid);
+      MakeComm(fnid_ptr + (i*4),  form("Export %s(%d): FNID 0x%X : %s", name, i, fnid, fnid_name));
+
+      MakeDword(stub_ptr + (i*4));
+      OpOff (stub_ptr + (i*4), 0, 0);
+      stub_opd = Dword(stub_ptr + (i*4));
+      MakeName(stub_opd, form("_Export_%s_%s_opd", name, get_fnid_name(name, fnid)));
+      stub = Dword(stub_opd);
+      MakeFunction(stub, BADADDR);
+      MakeName(stub,  form("_Export_%s_%s", name, fnid_name));
+      fnid_comment = get_fnid_comment(name, fnid);
+      if (fnid_comment != "") 
+	SetFunctionCmt(stub, fnid_comment, 1);
+    }    
+  }
+}
