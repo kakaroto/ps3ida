@@ -417,8 +417,8 @@ void idaapi PluginMain(int param)
 ************************************************************/
 
 const char G_PLUGIN_COMMENT[] = "PPC Jump Table fix";
-const char G_PLUGIN_HELP[] = "This plugin will fix PPC Jump Tables for "
-  "proper analysis.\n";
+const char G_PLUGIN_HELP[] = "This plugin adds Jump Table support to the PowerPC process module"
+  "of IDA, resolving switch/cases into properly analyzed code.";
 const char G_PLUGIN_NAME[] = "PPC JP: Jump table size";
 const char G_PLUGIN_HOTKEY[] = "";
 
