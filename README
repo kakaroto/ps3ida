@@ -1,0 +1,68 @@
+PS3IDA
+======
+
+** ps3ida -- A Collection of scripts and plugins for IDA and tools. **
+
+If you need a README file to understand what this is, then this project
+isn't meant for you...
+
+Plugins included :
+------------------
+
+PPCAltivec : This plugin enables recognition of many extra processor
+             specific instructions when using IDA Pro's PowerPC processor
+             module.
+             The added instructions support Altivec, VMX128,
+             Xbox360(Xenon), PS3(CellBE) and GC/WII(Gekko).
+
+PPCJT : This plugin adds Jump Table support to the PowerPC process module
+        of IDA, resolving switch/cases into properly analyzed code.
+
+
+Tools included :
+-----------------
+
+find_fnids.sh : A script that will look for Function IDs (FNID) from .a
+                files (path to $(SDK)/target/ppu/lib directory as first
+                argument to the script) and generate an FNIDS file
+
+ -- The FNIDS file format is "module  0xFNID  functionName comments" --
+
+ps3.xml : This file comes from xorloser's "SELF/SPRX Loader" and contains
+          an FNID to FunctionName association table
+
+ps3.tcl : This script transforms the ps3.xml file into a FNIDS file format
+xml.tcl : include file needed by ps3.tcl
+
+fnids_to_idh.tcl : A script that transforms a FNIDS file into fnids.idh
+                   idc header file
+fnids_to_idh2.tcl : A script that transforms a FNIDS file into fnids.idh
+                    idc header file but ignores the name of the module.
+                    (some fnids appear in multiple modules)
+
+syscall_names.idh : Header file containing syscall and hypercall names
+fnids.idh : Header file containing fnid to function associations
+common.idh : Header file containing common functions
+
+analyze_self.idc : IDC to analyze a decrypted .self file. It will find its
+                   TOC (you need to set it manually yourself), defines the
+                   OPD section and finds and defines the imported and the
+                   exported symbols from the file
+
+analyze_sprx.idc : IDC to analyze a decrypted .sprx file. It will find its
+                   TOC (you need to set it manually yourself), defines the
+                   OPD section and finds and defines the imported and the
+                   exported symbols from the file
+
+find_stdu.idc : Simple and stupid script that finds all 'stdu' instructions
+                and creates a function there
+
+lv2_dump_analyser.idc : IDC script that analyzes a raw dump of LV2
+lv2_dump_analyser_60.idc : IDC script that analyzes a raw dump of LV2
+                           ported to work properly on IDA 6.0
+
+find_lv1_call.idc : Simple IDC that asks for a hypercall number and finds
+                    all the calls to that hypercall in a lv2 dump
+
+PS3_HV_Dump.idc : Original HV dump analyzer IDC script by xorloser
+
