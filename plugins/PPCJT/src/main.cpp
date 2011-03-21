@@ -89,12 +89,12 @@ bool decode_insn_to_mnem(ea_t ea) {
 
 void print_ins(ea_t ea) {
   if (decode_insn_to_mnem(ea)) {
-    jmsg("0x%llX: instruction is : %s -- %s -- %s -- %s\n",
+    jmsg("0x%a: instruction is : %s -- %s -- %s -- %s\n",
         ea, g_mnem, g_opnd_s0, g_opnd_s1, g_opnd_s2);
-    jmsg("0x%llX: itype = %d - flags = %d - auxpref.high = %d -- .low = %d\n",
+    jmsg("0x%a: itype = %d - flags = %d - auxpref.high = %d -- .low = %d\n",
 	ea, cmd.itype, cmd.flags, cmd.auxpref_chars.high, cmd.auxpref_chars.low);
   } else {
-    jmsg("0x%llX: Not an instruction\n", ea);
+    jmsg("0x%a: Not an instruction\n", ea);
   }
 }
 
@@ -104,7 +104,7 @@ public:
   ea_t jtable;
   ea_t jump;
   ea_t jtdefault;
-  int jtsize;
+  ushort jtsize;
   bool pattern_found;
 
   static const char *ppc_roots;
@@ -115,7 +115,7 @@ public:
     jtable = 0;
     jump = 0;
     jtdefault = 0;
-    jtsize = -1;
+    jtsize = 0;
     pattern_found = false;
   }
 
@@ -308,12 +308,12 @@ public:
     if (decode_insn_to_mnem(cmd.ea)) {
       if (qstrcmp(g_mnem, "bgt") == 0) {
 	jtdefault = cmd.Op2.addr;
-	jmsg("Found bgt. jtdefault : 0x%llX\n", jtdefault);
+	jmsg("Found bgt. jtdefault : 0x%a\n", jtdefault);
 	return true;
       }
       if (qstrcmp(g_mnem, "ble") == 0) {
 	jtdefault = cmd.ea + 4;
-	jmsg("Found ble. jtdefault : 0x%llX\n", jtdefault);
+	jmsg("Found ble. jtdefault : 0x%a\n", jtdefault);
 	return true;
       }
     }
@@ -324,7 +324,7 @@ public:
     if (decode_insn_to_mnem(cmd.ea) &&
 	(qstrcmp(g_mnem, "cmplwi") == 0 ||
 	 qstrcmp(g_mnem, "cmpldi") == 0)) {
-      jtsize = cmd.Op3.value + 1;
+      jtsize = ushort(cmd.Op3.value) + 1;
       jmsg("Found cmplwi. Jump table size : %d\n", jtsize);
       return true;
     }
@@ -366,11 +366,11 @@ bool idaapi ppcjt_is_switch (switch_info_ex_t *si) {
   ppc_jump_pattern_t *p = new ppc_jump_pattern_t(*si);
 
   if (p->match(ea)) {
-    msg("Found Jump Table at : 0x%llX with %d cases\n", ea, p->jtsize);
+    msg("Found Jump Table at : 0x%a with %d cases\n", ea, p->jtsize);
     p->fill_si();
     return true;
   } else if (p->pattern_found) {
-    msg("Couldn't recognize jump table at 0x%llX\n", ea);
+    msg("Couldn't recognize jump table at 0x%a\n", ea);
   }
 
   decode_insn(ea);
