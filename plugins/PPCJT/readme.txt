@@ -8,4 +8,7 @@
    recommended to do so otherwise IDA will not be able to decrypt
    instructions properly, and the plugin may not be effective
 
-2) Copy "ppcjt.plx" and "ppcjt.p64" into your "ida\plugins" directory.
+2) For Windows :
+     Copy "ppcjt.plw" and "ppcjt.p64" into your "ida\plugins" directory.
+   For Linux :
+     Copy "ppcjt.plx" and "ppcjt.plx64" into your "ida\plugins" directory.
