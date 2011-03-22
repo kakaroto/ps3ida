@@ -17,6 +17,10 @@
  * of the code they wrote.
  */
 
+/* 
+    3/22/11 - mas - fixed include and added makefile (compiles fine for IDA 6 / OSX)
+*/
+
 /*
 
 8  cmplwi  crX, %r5, <jsize - 1>
@@ -51,7 +55,7 @@ OR
 #include <offset.hpp>
 
 //#define JUMP_DEBUG
-#include <jptcmn.cpp>
+#include "../../module/jptcmn.cpp"
 
 
 #define PPCJP_VERSION	"v0.1"
