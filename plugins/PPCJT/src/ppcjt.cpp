@@ -58,7 +58,7 @@ OR
 #include "../../module/jptcmn.cpp"
 
 
-#define PPCJP_VERSION	"v0.1"
+#define PPCJT_VERSION	"v0.2"
 
 #define G_STR_SIZE	256
 char g_mnem[G_STR_SIZE];
@@ -299,11 +299,18 @@ public:
   }
   virtual bool jpi6(void) {
     jmsg("%a: Checking for jpi 6\n", cmd.ea);
-    if (decode_insn_to_mnem(cmd.ea) &&
-	qstrcmp(g_mnem, "lwz") == 0 &&
-	cmd.Op1.reg == r[2]) {
-      jmsg("Found lwz.\n");
-      return true;
+    if (decode_insn_to_mnem(cmd.ea)) {
+      print_ins(cmd.ea);
+      if (qstrcmp(g_mnem, "lwz") == 0 &&
+          cmd.Op1.reg == r[2]) {
+        jmsg("Found lwz.\n");
+        return true;
+      }
+      if (qstrcmp(g_mnem, "ld") == 0 &&
+          cmd.Op1.reg == r[2]) {
+        jmsg("Found ld.\n");
+        return true;
+      }
     }
     return false;
   }
@@ -386,11 +393,11 @@ bool idaapi ppcjt_is_switch (switch_info_ex_t *si) {
 
 int idaapi PluginStartup(void)
 {
-  // PPC JP only works with PPC code :)
+  // PPCJT only works with PPC code :)
   if ( ph.id != PLFM_PPC )
     return PLUGIN_SKIP;
 
-  msg("Loading PPC Jump Table plugin\n");
+  msg("Loading PPC Jump Table plugin %s\n", PPCJT_VERSION);
 
   orig_is_switch = ph.is_switch;
   ph.is_switch = ppcjt_is_switch;
