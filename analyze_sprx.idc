@@ -24,7 +24,9 @@ static FindToc(ea) {
       consecutive_tocs = consecutive_tocs + 1;
       ea = ea + 8;
     } else {
-      if (consecutive_tocs > 10 && (toc - 0x8000) - (ea + 8) <= 0x10) {
+      if (consecutive_tocs > 10 &&
+          (toc - 0x8000) - (ea + 8) >= 0 &&
+          (toc - 0x8000) - (ea + 8) <= 0x10) {
 	MakeName(toc, "TOC");
 	break;
       }
