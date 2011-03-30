@@ -94,9 +94,20 @@ static FindImportsExports(opd, toc) {
 }
 
 static main() {
-  auto ea, toc, opd;
+  auto ea, toc, opd, make_unk;
   
-  //MakeUnknown(0, BADADDR, DOUNK_SIMPLE);
+  make_unk = AskYN (0, "Do you want to undefine the entire database before continuing?\n"
+         "It is recomended to start fresh because IDA can screw up the file otherwise.\n"
+         "WARNING: You will loose any work you've done on this file!!");
+
+  if (make_unk == -1) {
+    Message("Canceled\n");
+    return;
+  }
+
+  if (make_unk == 1)
+    MakeUnknown(0, BADADDR, DOUNK_SIMPLE);
+
   ea = ScreenEA();
   ea = NextSeg(FirstSeg());
 

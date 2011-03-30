@@ -100,10 +100,19 @@ static FindImportsExports() {
 }
 
 static main() {
-  auto ea, toc, opd;
-  
-  //MakeUnknown(0, BADADDR, DOUNK_SIMPLE);
+  auto ea, toc, opd, make_unk;
 
+  make_unk = AskYN (0, "Do you want to undefine the entire database before continuing?\n"
+         "It is recomended to start fresh because IDA can screw up the file otherwise.\n"
+         "WARNING: You will loose any work you've done on this file!!");
+
+  if (make_unk == -1) {
+    Message("Canceled\n");
+    return;
+  }
+
+  if (make_unk == 1)
+    MakeUnknown(0, BADADDR, DOUNK_SIMPLE);
   opd = FindOpd();
   if (opd == 0) {
     Message("Could not find the OPD segment\n");
