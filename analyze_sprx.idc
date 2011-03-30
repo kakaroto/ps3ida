@@ -94,7 +94,7 @@ static FindImportsExports(opd, toc) {
 static main() {
   auto ea, toc, opd;
   
-  MakeUnknown(0, BADADDR, DOUNK_SIMPLE);
+  //MakeUnknown(0, BADADDR, DOUNK_SIMPLE);
   ea = ScreenEA();
   ea = NextSeg(FirstSeg());
 
