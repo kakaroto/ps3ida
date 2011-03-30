@@ -15,6 +15,7 @@ static escape(str) {
 
   new_str = "";
 
+  j = 0;
   for (i = 0; i < strlen(str); i = i + 1) {
     if (str[i] == "\n") {
       new_str[j] = "\\";
