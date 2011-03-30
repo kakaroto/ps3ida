@@ -108,6 +108,12 @@ static main() {
     FindImportsExports(opd, toc);
     MakeName(toc, "TOC");
     Message("\TOC label at 0x%X\n", toc);
+    Warning(form("%s\n%s\n%s 0x%X\n%s",
+                 "Done.",
+                 "Don't forget to go to Options->General->Analysis->"
+                 "Processor specific options\n",
+                 "And under TOC Address, enter : ", toc,
+                 "Then press ok, then Reanalyze program"));
   } else {
     Message("Sorry, couldn't find the TOC");
   }
