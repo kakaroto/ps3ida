@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 9.00
+# Visual Studio 2005
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "vs2005_template", "vs2005_template.vcproj", "{2059C53A-BAB9-484A-8D2B-E7D254AA7128}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Debug64|Win32 = Debug64|Win32
+		Release|Win32 = Release|Win32
+		Release64|Win32 = Release64|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2059C53A-BAB9-484A-8D2B-E7D254AA7128}.Debug|Win32.ActiveCfg = Debug|Win32
+		{2059C53A-BAB9-484A-8D2B-E7D254AA7128}.Debug|Win32.Build.0 = Debug|Win32
+		{2059C53A-BAB9-484A-8D2B-E7D254AA7128}.Debug64|Win32.ActiveCfg = Debug64|Win32
+		{2059C53A-BAB9-484A-8D2B-E7D254AA7128}.Debug64|Win32.Build.0 = Debug64|Win32
+		{2059C53A-BAB9-484A-8D2B-E7D254AA7128}.Release|Win32.ActiveCfg = Release|Win32
+		{2059C53A-BAB9-484A-8D2B-E7D254AA7128}.Release|Win32.Build.0 = Release|Win32
+		{2059C53A-BAB9-484A-8D2B-E7D254AA7128}.Release64|Win32.ActiveCfg = Release64|Win32
+		{2059C53A-BAB9-484A-8D2B-E7D254AA7128}.Release64|Win32.Build.0 = Release64|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
