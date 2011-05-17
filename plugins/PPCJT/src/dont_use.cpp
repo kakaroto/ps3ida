@@ -1,3 +1,11 @@
+/**
+ This is my first implementation of ppcjt, and it's crappy and doesn't work correctly
+ It just does a dumb check for a specific pattern of instructions and doesn't work well
+ when new instructions are added or if registers used are different than the ones expected
+ It is not to be used and only kept here as an example and because it's sad to throw away
+ code, even if that code is crap... maybe someone can still learn something from it?
+ */
+
 // 
 // PPC Jump Tables
 // 
