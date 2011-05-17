@@ -410,8 +410,12 @@ int idaapi PluginStartup(void)
 void idaapi PluginShutdown(void)
 {
   msg("Shutting down PPC Jump Table plugin\n");
-  ph.is_switch = orig_is_switch;
-  orig_is_switch = NULL;
+
+  /* If not on PPC, then don't overwrite is_switch */
+  if (ph.id == PLFM_PPC) {
+    ph.is_switch = orig_is_switch;
+    orig_is_switch = NULL;
+  }
 }
 
 
