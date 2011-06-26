@@ -39,8 +39,9 @@ static list<Function> functions;
 
 
 #if 0
+
 #define MASK32_ALLSET	0xFFFFFFFF
-#define MASK64_ALLSET	0xFFFFFFFFFFFFFFFFLL
+#define MASK64_ALLSET	0xFFFFFFFFFFFFFFFFULL
 
 
 #define G_STR_SIZE	256
@@ -66,7 +67,7 @@ unsigned int GenerateMask32(int MB, int ME)
   if(	MB <  0 || ME <  0 ||
                          MB > 31 || ME > 31 )
     {
-      msg("Error with paramters GenerateMask32(%d, %d)\n", MB, ME);
+      msg("PPC2C: Error with paramters GenerateMask32(%d, %d)\n", MB, ME);
       return 0;
     }
 	
@@ -102,7 +103,7 @@ unsigned long long GenerateMask64(int MB, int ME)
   if(	MB <  0 || ME <  0 ||
                          MB > 63 || ME > 63 )
     {
-      msg("Error with paramters GenerateMask64(%d, %d)\n", MB, ME);
+      msg("PPC2C: Error with paramters GenerateMask64(%d, %d)\n", MB, ME);
       return 0;
     }
 	
@@ -112,7 +113,7 @@ unsigned long long GenerateMask64(int MB, int ME)
       // normal mask
       for(int i=MB; i<=ME; i=i+1)
         {
-          mask = mask | (unsigned long long)(1LL<<(63-i));
+          mask = mask | (unsigned long long)(1ULL<<(63-i));
         }
     }
   else if(MB == ME+1)
@@ -283,7 +284,7 @@ bool insert_iRotate_iMask32(ea_t ea, char* buff, int buffSize,
                             int leftRotate, int mb, int me)
 {
   // calculate the mask
-  // if no mask, then result is always 0
+  // if no mask, then result is the untouched target register
   unsigned int mask = GenerateMask32(mb, me);
   if(mask == 0)
     {
@@ -294,31 +295,67 @@ bool insert_iRotate_iMask32(ea_t ea, char* buff, int buffSize,
   // work out "rotate" part of the instruction
   // if all mask bits are set, then no need to use the mask
   char rot_str[G_STR_SIZE];
-  bool brackets = GenerateRotate32(rot_str, sizeof(rot_str), g_RS, leftRotate, 32-leftRotate, mask);
-  if(mask == MASK32_ALLSET)
-    {
-      qsnprintf(buff, buffSize, "%s = %s", g_RA, rot_str);
-      return true;
-    }
+  unsigned int rot_mask = mask;
+  bool brackets = GenerateRotate32(rot_str, sizeof(rot_str), g_RS, leftRotate, 32-leftRotate, rot_mask);
 	
   // generate mask strings
   char mask_str[G_STR_SIZE];
   qsnprintf(mask_str, sizeof(mask_str), "%s%X", (mask<0xA)?"":"0x", mask);
-  unsigned int not_mask = ~mask;
-  char not_mask_str[G_STR_SIZE];
-  qsnprintf(not_mask_str, sizeof(not_mask_str), "%s%X", (not_mask<0xA)?"":"0x", not_mask);
+  char rot_mask_str[G_STR_SIZE];
+  qsnprintf(rot_mask_str, sizeof(rot_mask_str), "%s%X", (rot_mask<0xA)?"":"0x", rot_mask);
+  //	unsigned int not_mask = ~mask;
+  //	char not_mask_str[G_STR_SIZE];
+  //	qsnprintf(not_mask_str, sizeof(not_mask_str), "%s%X", (not_mask<0xA)?"":"0x", not_mask);
 	
   // generate the resultant string
-  if(brackets)
-    qsnprintf(buff, buffSize, "%s = (%s & ~%s) | ((%s) & %s)", g_RA,
-              g_RA, mask_str,
-              rot_str, mask_str);
+  if(mask == MASK32_ALLSET)
+    {
+      qsnprintf(buff, buffSize, "%s = %s | %s", g_RA, g_RA, rot_str);
+      return true;
+    }
+  else if(rot_mask == MASK32_ALLSET)
+    {
+      if(brackets)
+        qsnprintf(buff, buffSize, "%s = (%s & ~%s) | (%s)", g_RA,
+                  g_RA, mask_str,
+                  rot_str);
+      else
+        qsnprintf(buff, buffSize, "%s = (%s & ~%s) | %s", g_RA,
+                  g_RA, mask_str,
+                  rot_str);
+    }
   else
-    qsnprintf(buff, buffSize, "%s = (%s & ~%s) | (%s & %s)", g_RA,
-              g_RA, mask_str,
-              rot_str, mask_str);
+    {
+      if(brackets)
+        qsnprintf(buff, buffSize, "%s = (%s & ~%s) | ((%s) & %s)", g_RA,
+                  g_RA, mask_str,
+                  rot_str, rot_mask_str);
+      else
+        qsnprintf(buff, buffSize, "%s = (%s & ~%s) | (%s & %s)", g_RA,
+                  g_RA, mask_str,
+                  rot_str, rot_mask_str);
+    }
   return true;
 }
+
+bool gen_rlwimi(ea_t ea, char* buff, int buffSize,
+                int leftRotate, int mb, int me)
+{
+  return insert_iRotate_iMask32(ea, buff, buffSize, leftRotate, mb, me);
+}
+
+bool gen_rlwinm(ea_t ea, char* buff, int buffSize,
+                int leftRotate, int mb, int me)
+{
+  return iRotate_iMask32(ea, buff, buffSize, leftRotate, mb, me);
+}
+
+bool gen_rlwnm(ea_t ea, char* buff, int buffSize,
+               const char* leftRotate, int mb, int me)
+{
+  return Rotate_iMask32(ea, buff, buffSize, leftRotate, mb, me);
+}
+
 
 
 // register rotate and immediate mask
@@ -399,23 +436,19 @@ bool insert_iRotate_iMask64(ea_t ea, char* buff, int buffSize,
                             int leftRotate, int mb, int me)
 {
   // calculate the mask
-  // if no mask, then result is always 0
+  // if no mask, then result is the untouched target register
   unsigned long long mask = GenerateMask64(mb, me);
   if(mask == 0)
     {
-      qsnprintf(buff, buffSize, "%s = 0", g_RA);
+      qsnprintf(buff, buffSize, "%s = %s", g_RA, g_RA);
       return true;
     }
 	
   // work out "rotate" part of the instruction
   // if all mask bits are set, then no need to use the mask
   char rot_str[G_STR_SIZE];
-  bool brackets = GenerateRotate64(rot_str, sizeof(rot_str), g_RS, leftRotate, 64-leftRotate, mask);
-  if(mask == MASK64_ALLSET)
-    {
-      qsnprintf(buff, buffSize, "%s = %s", g_RA, rot_str);
-      return true;
-    }
+  unsigned long long rot_mask = mask;
+  bool brackets = GenerateRotate64(rot_str, sizeof(rot_str), g_RS, leftRotate, 64-leftRotate, rot_mask);
 	
   // generate mask string
   char mask_str[G_STR_SIZE];
@@ -423,24 +456,48 @@ bool insert_iRotate_iMask64(ea_t ea, char* buff, int buffSize,
     qsnprintf(mask_str, sizeof(mask_str), "%s%X", (mask<0xA)?"":"0x", (unsigned long)mask);
   else
     qsnprintf(mask_str, sizeof(mask_str), "%s%X%08X", (mask<0xA)?"":"0x", (unsigned long)(mask>>32), (unsigned long)mask);
-  unsigned long long not_mask = ~mask;
-  char not_mask_str[G_STR_SIZE];
-  if(not_mask>>32 == 0)
-    qsnprintf(not_mask_str, sizeof(not_mask_str), "%s%X", (not_mask<0xA)?"":"0x", (unsigned long)not_mask);
+  char rot_mask_str[G_STR_SIZE];
+  if(rot_mask>>32 == 0)
+    qsnprintf(rot_mask_str, sizeof(rot_mask_str), "%s%X", (rot_mask<0xA)?"":"0x", (unsigned long)rot_mask);
   else
-    qsnprintf(not_mask_str, sizeof(not_mask_str), "%s%X%08X", (not_mask<0xA)?"":"0x", (unsigned long)(not_mask>>32), (unsigned long)not_mask);
+    qsnprintf(rot_mask_str, sizeof(rot_mask_str), "%s%X%08X", (rot_mask<0xA)?"":"0x", (unsigned long)(rot_mask>>32), (unsigned long)rot_mask);
+  //	unsigned long long not_mask = ~mask;
+  //	char not_mask_str[G_STR_SIZE];
+  //	if(not_mask>>32 == 0)
+  //		qsnprintf(not_mask_str, sizeof(not_mask_str), "%s%X", (not_mask<0xA)?"":"0x", (unsigned long)not_mask);
+  //	else
+  //		qsnprintf(not_mask_str, sizeof(not_mask_str), "%s%X%08X", (not_mask<0xA)?"":"0x", (unsigned long)(not_mask>>32), (unsigned long)not_mask);
 	
   // generate the resultant string
-  if(brackets)
-    qsnprintf(buff, buffSize, "%s = (%s & ~%s) | ((%s) & %s)", g_RA,
-              g_RA, mask_str,
-              rot_str, mask_str);
+  if(mask == MASK64_ALLSET)
+    {
+      qsnprintf(buff, buffSize, "%s = %s", g_RA, rot_str);
+    }
+  else if(rot_mask == MASK64_ALLSET)
+    {
+      if(brackets)
+        qsnprintf(buff, buffSize, "%s = (%s & ~%s) | (%s)", g_RA,
+                  g_RA, mask_str,
+                  rot_str);
+      else
+        qsnprintf(buff, buffSize, "%s = (%s & ~%s) | %s", g_RA,
+                  g_RA, mask_str,
+                  rot_str);
+    }
   else
-    qsnprintf(buff, buffSize, "%s = (%s & ~%s) | (%s & %s)", g_RA,
-              g_RA, mask_str,
-              rot_str, mask_str);
+    {
+      if(brackets)
+        qsnprintf(buff, buffSize, "%s = (%s & ~%s) | ((%s) & %s)", g_RA,
+                  g_RA, mask_str,
+                  rot_str, rot_mask_str);
+      else
+        qsnprintf(buff, buffSize, "%s = (%s & ~%s) | (%s & %s)", g_RA,
+                  g_RA, mask_str,
+                  rot_str, rot_mask_str);
+    }
   return true;
 }
+
 
 
 
@@ -553,11 +610,12 @@ bool bc(ea_t ea, char* buff, int buffSize)
   return true;
 }
 
+
 bool clrlwi(ea_t ea, char* buff, int buffSize)
 {
   // Clear left immediate
-  // clrlwi RA, RS, n
-  // (rlwinm RA, RS, 0, n, 31)
+  // clrlwi RA, RS, n   (n < 32)
+  // rlwinm RA, RS, 0, n, 31
   qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
   qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
   int n = atol(g_opnd_s2);
@@ -565,14 +623,14 @@ bool clrlwi(ea_t ea, char* buff, int buffSize)
   g_MB = n;
   g_ME = 31;
 	
-  return iRotate_iMask32(ea, buff, buffSize, g_SH, g_MB, g_ME);
+  return gen_rlwinm(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
 
 bool clrrwi(ea_t ea, char* buff, int buffSize)
 {
   // Clear right immediate
-  // clrrwi RA, RS, n
-  // (rlwinm RA, RS, 0, 0, 31-n)
+  // clrrwi RA, RS, n   (n < 32)
+  // rlwinm RA, RS, 0, 0, 31-n
   qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
   qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
   int n = atol(g_opnd_s2);
@@ -580,44 +638,31 @@ bool clrrwi(ea_t ea, char* buff, int buffSize)
   g_MB = 0;
   g_ME = 31-n;
 
-  return iRotate_iMask32(ea, buff, buffSize, g_SH, g_MB, g_ME);
+  return gen_rlwinm(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
 
-bool clrslwi(ea_t ea, char* buff, int buffSize)
+bool clrlslwi(ea_t ea, char* buff, int buffSize)
 {
   // Clear left and shift left immediate
-  // clrslwi RA, RS, b, n
-  // (rlwinm RA, RS, b-n, 31-n)
+  // clrlslwi RA, RS, b, n   (n <= b < 32)
+  // rlwinm RA, RS, n, b-n, 31-n
   qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
   qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
   int b = atol(g_opnd_s2);
   int n = atol(g_opnd_s3);
   g_SH = n;
-  g_MB = 31;
-  g_ME = 31-b;
+  //	g_MB = 31;
+  //	g_ME = 31-b;
+  g_MB = b-n;
+  g_ME = 31-n;
 	
-  return iRotate_iMask32(ea, buff, buffSize, g_SH, g_MB, g_ME);
+  return gen_rlwinm(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
 
-bool extrwi(ea_t ea, char* buff, int buffSize)
-{
-  // Extract and right justify immediate
-  // extrwi RA, RS, n, b
-  // rlwinm RA, RS, b+n, 32-n, 31
-  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
-  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
-  int n = atol(g_opnd_s2);
-  int b = atol(g_opnd_s3);
-  g_SH = 32-(b+n);
-  g_MB = 32-n;
-  g_ME = 31;
-	
-  return iRotate_iMask32(ea, buff, buffSize, g_SH, g_MB, g_ME);
-}
 bool extlwi(ea_t ea, char* buff, int buffSize)
 {
   // Extract and left justify immediate
-  // extlwi RA, RS, n, b
+  // extlwi RA, RS, n, b   (n > 0)
   // rlwinm RA, RS, b, 0, n-1
   qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
   qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
@@ -627,13 +672,29 @@ bool extlwi(ea_t ea, char* buff, int buffSize)
   g_MB = 0;
   g_ME = n-1;
 	
-  return iRotate_iMask32(ea, buff, buffSize, g_SH, g_MB, g_ME);
+  return gen_rlwinm(ea, buff, buffSize, g_SH, g_MB, g_ME);
+}
+
+bool extrwi(ea_t ea, char* buff, int buffSize)
+{
+  // Extract and right justify immediate
+  // extrwi RA, RS, n, b   (n > 0)
+  // rlwinm RA, RS, b+n, 32-n, 31
+  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
+  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
+  int n = atol(g_opnd_s2);
+  int b = atol(g_opnd_s3);
+  g_SH = b+n;
+  g_MB = 32-n;
+  g_ME = 31;
+	
+  return gen_rlwinm(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
 
 bool inslwi(ea_t ea, char* buff, int buffSize)
 {
   // Insert from left immediate
-  // inslwi RA, RS, n, b
+  // inslwi RA, RS, n, b   (n > 0)
   // rlwimi RA, RS, 32-b, b, (b+n)-1
   qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
   qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
@@ -641,15 +702,15 @@ bool inslwi(ea_t ea, char* buff, int buffSize)
   int b = atol(g_opnd_s3);
   g_SH = 32-b;
   g_MB = b;
-  g_ME = b+n-1;
+  g_ME = (b+n)-1;
 	
-  return insert_iRotate_iMask32(ea, buff, buffSize, g_SH, g_MB, g_ME);
+  return gen_rlwimi(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
 
 bool insrwi(ea_t ea, char* buff, int buffSize)
 {
   // Insert from right immediate
-  // insrwi RA, RS, n, b
+  // insrwi RA, RS, n, b   (n > 0)
   // rlwimi RA, RS, 32-(b+n), b, (b+n)-1
   qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
   qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
@@ -657,9 +718,22 @@ bool insrwi(ea_t ea, char* buff, int buffSize)
   int b = atol(g_opnd_s3);
   g_SH = 32-(b+n);
   g_MB = b;
-  g_ME = b+n-1;
+  g_ME = (b+n)-1;
 	
-  return insert_iRotate_iMask32(ea, buff, buffSize, g_SH, g_MB, g_ME);
+  return gen_rlwimi(ea, buff, buffSize, g_SH, g_MB, g_ME);
+}
+
+bool rlwimi(ea_t ea, char* buff, int buffSize)
+{
+  // Rotate Left Word Immediate Then Mask Insert
+  // rlwimi RA, RS, SH, MB, ME
+  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
+  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
+  g_SH = atol(g_opnd_s2);
+  g_MB = atol(g_opnd_s3);
+  g_ME = atol(g_opnd_s4);
+	
+  return gen_rlwimi(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
 
 bool rlwinm(ea_t ea, char* buff, int buffSize)
@@ -672,7 +746,7 @@ bool rlwinm(ea_t ea, char* buff, int buffSize)
   g_MB = atol(g_opnd_s3);
   g_ME = atol(g_opnd_s4);
 	
-  return iRotate_iMask32(ea, buff, buffSize, g_SH, g_MB, g_ME);
+  return gen_rlwinm(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
 
 bool rlwnm(ea_t ea, char* buff, int buffSize)
@@ -685,7 +759,21 @@ bool rlwnm(ea_t ea, char* buff, int buffSize)
   g_MB = atol(g_opnd_s3);
   g_ME = atol(g_opnd_s4);
 	
-  return Rotate_iMask32(ea, buff, buffSize, g_RB, g_MB, g_ME);
+  return gen_rlwnm(ea, buff, buffSize, g_RB, g_MB, g_ME);
+}
+
+bool rotlw(ea_t ea, char* buff, int buffSize)
+{
+  // Rotate left
+  // rotlw RA, RS, RB
+  // rlwnm RA, RS, RB, 0, 31
+  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
+  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
+  qstrncpy(g_RB, g_opnd_s2, sizeof(g_RB));
+  g_MB = 0;
+  g_ME = 31;
+	
+  return gen_rlwnm(ea, buff, buffSize, g_RB, g_MB, g_ME);
 }
 
 bool rotlwi(ea_t ea, char* buff, int buffSize)
@@ -700,7 +788,7 @@ bool rotlwi(ea_t ea, char* buff, int buffSize)
   g_MB = 0;
   g_ME = 31;
 	
-  return iRotate_iMask32(ea, buff, buffSize, g_SH, g_MB, g_ME);
+  return gen_rlwinm(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
 
 bool rotrwi(ea_t ea, char* buff, int buffSize)
@@ -715,27 +803,13 @@ bool rotrwi(ea_t ea, char* buff, int buffSize)
   g_MB = 0;
   g_ME = 31;
 	
-  return iRotate_iMask32(ea, buff, buffSize, g_SH, g_MB, g_ME);
-}
-
-bool rotlw(ea_t ea, char* buff, int buffSize)
-{
-  // Rotate left
-  // rotlw RA, RS, RB
-  // rlwnm RA, RS, RB, 0, 31
-  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
-  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
-  qstrncpy(g_RB, g_opnd_s2, sizeof(g_RB));
-  g_MB = 0;
-  g_ME = 31;
-	
-  return Rotate_iMask32(ea, buff, buffSize, g_RB, g_MB, g_ME);
+  return gen_rlwinm(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
 
 bool slwi(ea_t ea, char* buff, int buffSize)
 {
   // Shift left immediate
-  // slwi RA, RS, n
+  // slwi RA, RS, n   (n < 32)
   // rlwinm RA, RS, n, 0, 31-n
   qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
   qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
@@ -745,12 +819,13 @@ bool slwi(ea_t ea, char* buff, int buffSize)
   g_ME = 31-n;
 	
   // fix the mask values because no mask is required when doing "slwi"
-  return iRotate_iMask32(ea, buff, buffSize, g_SH, g_MB, g_ME);
+  return gen_rlwinm(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
+
 bool srwi(ea_t ea, char* buff, int buffSize)
 {
   // Shift right immediate
-  // srwi RA, RS, n
+  // srwi RA, RS, n   (n < 32)
   // rlwinm RA, RS, 32-n, n, 31
   qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
   qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
@@ -760,13 +835,216 @@ bool srwi(ea_t ea, char* buff, int buffSize)
   g_ME = 31;
 	
   // fix the mask values because no mask is required when doing "slwi"
-  return iRotate_iMask32(ea, buff, buffSize, g_SH, g_MB, g_ME);
+  return gen_rlwinm(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
 
 
 
 
+
+
+// Rotate Left Double Word then Clear Left
+// rldcl RA, RS, RB, MB
+bool gen_rldcl(ea_t ea, char* buff, int buffSize,
+               const char* leftRotate, int mb, int me)
+{
+  return Rotate_iMask64(ea, buff, buffSize, leftRotate, mb, me);
+}
+
+// Rotate Left Double Word then Clear Right
+// rldcr RA, RS, RB, MB
+bool gen_rldcr(ea_t ea, char* buff, int buffSize,
+               const char* leftRotate, int mb, int me)
+{
+  return gen_rldcl(ea, buff, buffSize, leftRotate, me, mb);
+}
+
+// Rotate Left Double Word Immediate then Clear
+// rldic RA, RS, SH, MB
+bool gen_rldic(ea_t ea, char* buff, int buffSize,
+               int leftRotate, int mb, int me)
+{
+  return iRotate_iMask64(ea, buff, buffSize, leftRotate, mb, me);
+}
+
+// Rotate Left Double Word Immediate then Clear Left
+// rldicl RA, RS, SH, MB
+bool gen_rldicl(ea_t ea, char* buff, int buffSize,
+                int leftRotate, int mb, int me)
+{
+  return iRotate_iMask64(ea, buff, buffSize, leftRotate, mb, me);
+}
+
+// Rotate Left Double Word Immediate then Clear Right
+// rldicr RA, RS, SH, ME
+bool gen_rldicr(ea_t ea, char* buff, int buffSize,
+                int leftRotate, int mb, int me)
+{
+  return iRotate_iMask64(ea, buff, buffSize, leftRotate, mb, me);
+}
+
+// Rotate Left Double Word Immediate then Mask Insert
+// rldimi RA, RS, SH, MB
+bool gen_rldimi(ea_t ea, char* buff, int buffSize,
+                int leftRotate, int mb, int me)
+{
+  return insert_iRotate_iMask64(ea, buff, buffSize, leftRotate, mb, me);
+}
+
+
+
 // 64bit instructions
+
+bool clrldi(ea_t ea, char* buff, int buffSize)
+{
+  // Clear left immediate
+  // clrldi RA, RS, n   (n < 64)
+  // rldicl RA, RS, 0, n
+  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
+  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
+  int n = atol(g_opnd_s2);
+  g_SH = 0;
+  g_MB = n;
+  g_ME = 63;
+	
+  return gen_rldicl(ea, buff, buffSize, g_SH, g_MB, g_ME);
+}
+
+bool clrrdi(ea_t ea, char* buff, int buffSize)
+{
+  // Clear right immediate
+  // clrrdi RA, RS, n   (n < 64)
+  // rldicr RA, RS, 0, 63-n
+  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
+  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
+  int n = atol(g_opnd_s2);
+  g_SH = 0;
+  g_MB = 0;
+  g_ME = 63-n;
+	
+  return gen_rldicr(ea, buff, buffSize, g_SH, g_MB, g_ME);
+}
+
+bool clrlsldi(ea_t ea, char* buff, int buffSize)
+{
+  // Clear left and shift left immediate
+  // clrlsldi RA, RS, b, n   (n <= b < 64)
+  // rldic RA, RS, n, b-n
+  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
+  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
+  int b = atol(g_opnd_s2);
+  int n = atol(g_opnd_s3);
+  g_SH = n;
+  g_MB = b-n;
+  g_ME = 63-n;
+	
+  return gen_rldic(ea, buff, buffSize, g_SH, g_MB, g_ME);
+}
+
+bool extldi(ea_t ea, char* buff, int buffSize)
+{
+  // Extract and left justify immediate
+  // extldi RA, RS, n, b   (n > 0)
+  // rldicr RA, RS, b, n-1
+  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
+  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
+  int n = atol(g_opnd_s2);
+  int b = atol(g_opnd_s3);
+  g_SH = b;
+  g_MB = 0;
+  g_ME = n-1;
+	
+  return gen_rldicr(ea, buff, buffSize, g_SH, g_MB, g_ME);
+}
+
+bool extrdi(ea_t ea, char* buff, int buffSize)
+{
+  // Extract and right justify immediate
+  // extrdi RA, RS, n, b   (n > 0)
+  // rldicl RA, RS, b+n, 64-n
+  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
+  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
+  int n = atol(g_opnd_s2);
+  int b = atol(g_opnd_s3);
+  g_SH = b+n;
+  g_MB = 64-n;
+  g_ME = 63;
+	
+  return gen_rldicl(ea, buff, buffSize, g_SH, g_MB, g_ME);
+}
+
+bool insrdi(ea_t ea, char* buff, int buffSize)
+{
+  // Insert from right immediate
+  // insrdi RA, RS, n, b   (n > 0)
+  // rldimi RA, RS, 64-(b+n), b
+  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
+  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
+  int n = atol(g_opnd_s2);
+  int b = atol(g_opnd_s3);
+  g_SH = 64-(b+n);
+  g_MB = b;
+  g_ME = 63 - g_SH;
+	
+  return gen_rldimi(ea, buff, buffSize, g_SH, g_MB, g_ME);
+}
+
+bool rotld(ea_t ea, char* buff, int buffSize)
+{
+  // Rotate left
+  // rotld RA, RS, RB
+  // rldcl RA, RS, RB, 0
+  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
+  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
+  qstrncpy(g_RB, g_opnd_s2, sizeof(g_RB));
+  g_MB = 0;
+  g_ME = 63;
+	
+  return gen_rldcl(ea, buff, buffSize, g_RB, g_MB, g_ME);
+}
+
+bool rotldi(ea_t ea, char* buff, int buffSize)
+{
+  // Rotate left immediate
+  // rotldi RA, RS, n
+  // rldicl RA, RS, n, 0
+  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
+  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
+  int n = atol(g_opnd_s2);
+  g_SH = n;
+  g_MB = 0;
+  g_ME = 63;
+	
+  return gen_rldicl(ea, buff, buffSize, g_SH, g_MB, g_ME);
+}
+
+bool rotrdi(ea_t ea, char* buff, int buffSize)
+{
+  // ate right immediate
+  // rotrdi RA, RS, n
+  // rldicl RA, RS, 64-n, 0
+  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
+  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
+  int n = atol(g_opnd_s2);
+  g_SH = 64-n;
+  g_MB = 0;
+  g_ME = 63;
+	
+  return gen_rldicl(ea, buff, buffSize, g_SH, g_MB, g_ME);
+}
+
+bool rldcl(ea_t ea, char* buff, int buffSize)
+{
+  // Rotate Left Double Word then Clear Left
+  // rldcl RA, RS, RB, MB
+  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
+  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
+  qstrncpy(g_RB, g_opnd_s2, sizeof(g_RB));
+  g_MB = atol(g_opnd_s3);
+  g_ME = 63;
+	
+  return gen_rldcl(ea, buff, buffSize, g_RB, g_MB, g_ME);
+}
 
 bool rldcr(ea_t ea, char* buff, int buffSize)
 {
@@ -778,7 +1056,7 @@ bool rldcr(ea_t ea, char* buff, int buffSize)
   g_MB = 0;
   g_ME = atol(g_opnd_s3);
 	
-  return Rotate_iMask64(ea, buff, buffSize, g_RB, g_MB, g_ME);
+  return gen_rldcr(ea, buff, buffSize, g_RB, g_MB, g_ME);
 }
 
 bool rldic(ea_t ea, char* buff, int buffSize)
@@ -791,7 +1069,7 @@ bool rldic(ea_t ea, char* buff, int buffSize)
   g_MB = atol(g_opnd_s3);
   g_ME = 63 - g_SH;
 	
-  return iRotate_iMask64(ea, buff, buffSize, g_SH, g_MB, g_ME);
+  return gen_rldic(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
 
 bool rldicl(ea_t ea, char* buff, int buffSize)
@@ -804,7 +1082,7 @@ bool rldicl(ea_t ea, char* buff, int buffSize)
   g_MB = atol(g_opnd_s3);
   g_ME = 63;
 	
-  return iRotate_iMask64(ea, buff, buffSize, g_SH, g_MB, g_ME);
+  return gen_rldicl(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
 
 bool rldicr(ea_t ea, char* buff, int buffSize)
@@ -817,7 +1095,7 @@ bool rldicr(ea_t ea, char* buff, int buffSize)
   g_MB = 0;
   g_ME = atol(g_opnd_s3);
 
-  return iRotate_iMask64(ea, buff, buffSize, g_SH, g_MB, g_ME);
+  return gen_rldicr(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
 
 bool rldimi(ea_t ea, char* buff, int buffSize)
@@ -830,23 +1108,38 @@ bool rldimi(ea_t ea, char* buff, int buffSize)
   g_MB = atol(g_opnd_s3);
   g_ME = 63 - g_SH;
 	
-  return insert_iRotate_iMask64(ea, buff, buffSize, g_SH, g_MB, g_ME);
+  return gen_rldimi(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
 
-bool rlwimi(ea_t ea, char* buff, int buffSize)
+bool sldi(ea_t ea, char* buff, int buffSize)
 {
-  // Rotate Left Word Immediate Then Mask Insert
-  // rlwimi RA, RS, SH, MB, ME
+  // Shift left immediate
+  // sldi RA, RS, n   (n < 64)
+  // rldicr RA, RS, n, 63-n
   qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
   qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
-  g_SH = atol(g_opnd_s2);
-  g_MB = atol(g_opnd_s3);
-  g_ME = atol(g_opnd_s4);
+  int n = atol(g_opnd_s2);
+  g_SH = n;
+  g_MB = 0;
+  g_ME = 63-n;
 	
-  return insert_iRotate_iMask64(ea, buff, buffSize, g_SH, g_MB, g_ME);
+  return gen_rldimi(ea, buff, buffSize, g_SH, g_MB, g_ME);
 }
 
-
+bool srdi(ea_t ea, char* buff, int buffSize)
+{
+  // Shift right immediate
+  // srdi RA, RS, n   (n < 64)
+  // rldicl RA, RS, 64-n, n
+  qstrncpy(g_RA, g_opnd_s0, sizeof(g_RA));
+  qstrncpy(g_RS, g_opnd_s1, sizeof(g_RS));
+  int n = atol(g_opnd_s2);
+  g_SH = 64-n;
+  g_MB = n;
+  g_ME = 63;
+	
+  return gen_rldimi(ea, buff, buffSize, g_SH, g_MB, g_ME);
+}
 
 
 
@@ -854,12 +1147,13 @@ bool rlwimi(ea_t ea, char* buff, int buffSize)
 // simplify each "instruction" handling function
 bool PPCAsm2C(ea_t ea, char* buff, int buffSize)
 {
+
   // below is a list of supported instructions
   if(		qstrcmp(g_mnem, "bc")==0 )		return bc(		ea, buff, buffSize);
   // clear
   else if(qstrcmp(g_mnem, "clrlwi")==0 )	return clrlwi(	ea, buff, buffSize);
   else if(qstrcmp(g_mnem, "clrrwi")==0 )	return clrrwi(	ea, buff, buffSize);
-  else if(qstrcmp(g_mnem, "clrslwi")==0 )	return clrslwi(	ea, buff, buffSize);
+  else if(qstrcmp(g_mnem, "clrlslwi")==0 )return clrlslwi(ea, buff, buffSize);
   // extract
   else if(qstrcmp(g_mnem, "extlwi")==0 )	return extlwi(	ea, buff, buffSize);
   else if(qstrcmp(g_mnem, "extrwi")==0 )	return extrwi(	ea, buff, buffSize);
@@ -867,6 +1161,7 @@ bool PPCAsm2C(ea_t ea, char* buff, int buffSize)
   else if(qstrcmp(g_mnem, "inslwi")==0 )	return inslwi(	ea, buff, buffSize);
   else if(qstrcmp(g_mnem, "insrwi")==0 )	return insrwi(	ea, buff, buffSize);
   // rotate and mask
+  else if(qstrcmp(g_mnem, "rlwimi")==0 )	return rlwimi(	ea, buff, buffSize);
   else if(qstrcmp(g_mnem, "rlwinm")==0 )	return rlwinm(	ea, buff, buffSize);
   else if(qstrcmp(g_mnem, "rlwnm" )==0 )	return rlwnm(	ea, buff, buffSize);
   // rotate
@@ -877,17 +1172,37 @@ bool PPCAsm2C(ea_t ea, char* buff, int buffSize)
   else if(qstrcmp(g_mnem, "slwi"  )==0 )	return slwi(	ea, buff, buffSize);
   else if(qstrcmp(g_mnem, "srwi"  )==0 )	return srwi(	ea, buff, buffSize);
 	
+	
   // 64bit versions of the above
+  // *** possibly these are not correct ***
+  // *** they need more testing ***
+	
+  // clear
+  else if(qstrcmp(g_mnem, "clrldi" )==0 )	return clrldi(	ea, buff, buffSize);
+  else if(qstrcmp(g_mnem, "clrrdi" )==0 )	return clrrdi(	ea, buff, buffSize);
+  else if(qstrcmp(g_mnem, "clrlsldi" )==0)return clrlsldi(ea, buff, buffSize);
+  // extract
+  else if(qstrcmp(g_mnem, "extldi" )==0 )	return extldi(	ea, buff, buffSize);
+  else if(qstrcmp(g_mnem, "extrdi" )==0 )	return extrdi(	ea, buff, buffSize);
+  // insert
+  else if(qstrcmp(g_mnem, "insrdi" )==0 )	return insrdi(	ea, buff, buffSize);
+  // rotate
+  else if(qstrcmp(g_mnem, "rotld" )==0 )	return rotld(	ea, buff, buffSize);
+  else if(qstrcmp(g_mnem, "rotldi" )==0 )	return rotldi(	ea, buff, buffSize);
+  else if(qstrcmp(g_mnem, "rotrdi" )==0 )	return rotrdi(	ea, buff, buffSize);
+  // rotate and mask
+  else if(qstrcmp(g_mnem, "rldcl" )==0 )	return rldcl(	ea, buff, buffSize);
   else if(qstrcmp(g_mnem, "rldcr" )==0 )	return rldcr(	ea, buff, buffSize);
   else if(qstrcmp(g_mnem, "rldic" )==0 )	return rldic(	ea, buff, buffSize);
   else if(qstrcmp(g_mnem, "rldicl")==0 )	return rldicl(	ea, buff, buffSize);
   else if(qstrcmp(g_mnem, "rldicr")==0 )	return rldicr(	ea, buff, buffSize);
   else if(qstrcmp(g_mnem, "rldimi")==0 )	return rldimi(	ea, buff, buffSize);
-  else if(qstrcmp(g_mnem, "rlwimi")==0 )	return rlwimi(	ea, buff, buffSize);
+  // shift
+  else if(qstrcmp(g_mnem, "sldi" )==0 )	return sldi(	ea, buff, buffSize);
+  else if(qstrcmp(g_mnem, "srdi" )==0 )	return srdi(	ea, buff, buffSize);
 	
   return true;
 }
-
 
 #endif
 
