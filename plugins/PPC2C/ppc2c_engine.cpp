@@ -70,16 +70,18 @@ Register::Register (const string &reg)
         ERROR("Error: Unknown register : '%s'\n", reg.c_str());
     }
   } else {
-    if (reg == "LR")
+    if (reg == "LR" || reg == "lr")
       this->value = REGISTER_LR;
-    else if (reg == "CTR")
+    else if (reg == "CTR" || reg == "ctr")
       this->value = REGISTER_CTR;
     else if (reg.length() == 3 && reg.compare(0, 2, "cr") == 0 &&
              reg[2] >= '0' && reg[2] <= '7')
       this->value = (enum_register) (REGISTER_CR0 + reg[2] - '0');
 
-    if (this->value == REGISTER_UNSET)
-      ERROR("Error: Unknown specialregister : '%s'\n", reg.c_str());
+	if (this->value == REGISTER_UNSET) {
+      //ERROR("Error: Unknown special register : '%s'\n", reg.c_str());
+		this->str = reg;
+	}
   }
 }
 
@@ -92,33 +94,21 @@ Register::operator std::string ()
     return "r" + tostr(reg);
   else if (reg == REGISTER_SP)
     return "sp";
+  else if (reg == REGISTER_LR)
+    return "LR";
+  else if (reg == REGISTER_CTR)
+    return "CTR";
 
-  ERROR ("Error: Can't convert register to string : '%d'\n", reg);
-  return "";
+  //ERROR ("Error: Can't convert register to string : '%d'\n", reg);
+  return this->str;
 }
 
 Register
-parse_pointer (const string &ptr, int *offset)
+parse_pointer (ea_t ea, int operand, ea_t &offset)
 {
-  long int idx1 = ptr.find('(');
-  long int idx2 = ptr.find(')');
-  string reg;
-  string value;
-
-  if ((idx2 - idx1 - 1) > 5) {
-    ERROR ("Error: Unable to parse pointer: %s\n", ptr.c_str());
-    return REGISTER_UNSET;
-  }
-  reg = ptr.substr(idx1 + 1, idx2 - idx1 - 1);
-  value = ptr.substr(0, idx1);
-  idx1 = value.find("arg_");
-  idx2 = value.find("var_");
-  if (idx1 != -1)
-    *offset = -strtol (value.c_str() + idx1, NULL, 16);
-  else if (idx2 != -1)
-    *offset = strtol (value.c_str() + idx2, NULL, 16);
-  else
-    *offset = strtol (value.c_str(), NULL, 16);
-
-  return reg;
+  ua_ana0(ea);
+  if (cmd.Operands[operand].type != o_displ)
+	  return REGISTER_UNSET;
+  offset = cmd.Operands[operand].addr;
+  return cmd.Operands[operand].reg;
 }

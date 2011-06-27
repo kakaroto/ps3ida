@@ -38,7 +38,7 @@ static list<Function> functions;
 #define PPC2C_VERSION	"v0.1"
 
 
-#if 0
+#if 1
 
 #define MASK32_ALLSET	0xFFFFFFFF
 #define MASK64_ALLSET	0xFFFFFFFFFFFFFFFFULL
@@ -1148,6 +1148,54 @@ bool srdi(ea_t ea, char* buff, int buffSize)
 bool PPCAsm2C(ea_t ea, char* buff, int buffSize)
 {
 
+	// make sure address is valid and that it points to the start of an instruction
+	if(ea == BADADDR)
+		return false;
+	if( !isCode(get_flags_novalue(ea)) )
+		return false;
+	*buff = 0;
+	
+	// get instruction mnemonic
+	if( !ua_mnem(ea, g_mnem, sizeof(g_mnem)) )
+		return false;
+	tag_remove(g_mnem, g_mnem, sizeof(g_mnem));
+	char* ptr = (char*)qstrstr(g_mnem, ".");
+	if(ptr) *ptr = 0;
+	
+	// get instruction operand strings
+	// IDA only natively supports 3 operands
+	*g_opnd_s0 = 0;
+	ua_outop2(ea, g_opnd_s0, sizeof(g_opnd_s0), 0);
+	tag_remove(g_opnd_s0, g_opnd_s0, sizeof(g_opnd_s0));
+	
+	*g_opnd_s1 = 0;
+	ua_outop2(ea, g_opnd_s1, sizeof(g_opnd_s1), 1);
+	tag_remove(g_opnd_s1, g_opnd_s1, sizeof(g_opnd_s1));
+	
+	*g_opnd_s2 = 0;
+	ua_outop2(ea, g_opnd_s2, sizeof(g_opnd_s2), 2);
+	tag_remove(g_opnd_s2, g_opnd_s2, sizeof(g_opnd_s2));
+	
+	// use some string manipulation to extract additional operands
+	// when more than 3 operands are used
+	*g_opnd_s4 = 0;
+	*g_opnd_s3 = 0;
+	const char* comma1 = qstrstr(g_opnd_s2, ",");
+	if(comma1 != NULL)
+	{
+		// operand-3 exists
+		qstrncpy(g_opnd_s3, comma1+1, sizeof(g_opnd_s3));
+		g_opnd_s2[comma1-g_opnd_s2] = 0;
+		
+		const char* comma2 = qstrstr(comma1+1, ",");
+		if(comma2 != NULL)
+		{
+			// operand-4 exists
+			qstrncpy(g_opnd_s4, comma2+1, sizeof(g_opnd_s4));
+			g_opnd_s3[comma2-(comma1+1)] = 0;
+		}
+	}
+
   // below is a list of supported instructions
   if(		qstrcmp(g_mnem, "bc")==0 )		return bc(		ea, buff, buffSize);
   // clear
@@ -1270,6 +1318,17 @@ parse_instruction (Function &func, ea_t ea)
   if( !ua_mnem(ea, buffer, sizeof(buffer)) )
     return false;
   tag_remove(buffer, buffer, sizeof(buffer));
+  
+  // Some mnemonics are wrong, let's fix them.
+  ua_ana0(ea);
+  if(cmd.itype == 13 && (cmd.auxpref & 8)) {
+    // fix mnemonic for "bl"
+	qstrncpy(buffer, "bl", sizeof(buffer));
+  } else if(cmd.itype == 320 && cmd.auxpref == 0x500) {
+    // fix mnemonic for "blr"
+	qstrncpy(buffer, "blr", sizeof(buffer));
+  }
+
   ins.type = INSTRUCTION_TYPE_INSTRUCTION;
   ins.address = ea;
   ins.name = buffer;
@@ -1434,18 +1493,15 @@ break_loop2:
 	return success;
 }
 
-static bool
-generate_prototypes ()
+#define OUTPUT msg
+
+static void
+generate_prototype (Function &func)
 {
-	list<Function>::iterator it;
-	for (it = functions.begin(); it != functions.end(); it++) {
-		Function func = *it;
-		msg("%s %s (", func.ret ? "uint64" : "void", func.name.c_str());
-		for (int i = 0; i < func.arguments; i++)
-			msg ("uint64t arg%d%s", i+1, i == func.arguments-1 ? "" : ", ");
-		msg(");\n");
-	}
-	return true;
+	OUTPUT("%s %s (", func.ret ? "uint64" : "void", func.name.c_str());
+	for (int i = 0; i < func.arguments; i++)
+		OUTPUT ("uint64t arg%d%s", i+1, i == func.arguments-1 ? "" : ", ");
+	OUTPUT(")");
 }
 
 static bool
@@ -1455,29 +1511,28 @@ generate_functions ()
 	for (it = functions.begin(); it != functions.end(); it++) {
 		Function func = *it;
 		list<Instruction>::iterator iter;
-		Instruction *inline_comment = NULL;
+		Instruction inline_comment;
+		inline_comment.type = INSTRUCTION_TYPE_NONE;
 
-		msg("%s %s (", func.ret ? "uint64" : "void", func.name.c_str());
-		for (int i = 0; i < func.arguments; i++)
-			msg ("uint64t arg%d%s", i+1, i == func.arguments-1 ? "" : ", ");
-		msg (")\n{\n");
-		msg ("  uint64_t LR, *sp, *rtoc, r0, r1, r2, r3, r4, r5, r6,\n");
-		msg ("      r7, r8, r9, r10, r11, r12, r13, r14, r15, r16,\n");
-		msg ("      r17, r18, r19, r20, r21, r22, r23, r24, r25, r26,\n");
-		msg ("      r27, r28, r29, r30, r31, r32;\n\n");
+		generate_prototype(func);
+		OUTPUT ("\n{\n");
+		OUTPUT ("  uint64_t LR, *sp, *rtoc, r0, r1, r2, r3, r4, r5, r6,\n");
+		OUTPUT ("      r7, r8, r9, r10, r11, r12, r13, r14, r15, r16,\n");
+		OUTPUT ("      r17, r18, r19, r20, r21, r22, r23, r24, r25, r26,\n");
+		OUTPUT ("      r27, r28, r29, r30, r31, r32;\n\n");
 
 		for (iter = func.instructions.begin(); iter != func.instructions.end(); iter++) {
 			Instruction ins = *iter;
 			switch (ins.type) {
 			case INSTRUCTION_TYPE_COMMENT:
-				msg ("  /* %s */\n", ins.name.c_str());
+				OUTPUT ("  /* %s */\n", ins.name.c_str());
 				break;
 			case INSTRUCTION_TYPE_INLINE_COMMENT:
-				inline_comment = &ins;
+				inline_comment = ins;
 				break;
 			case INSTRUCTION_TYPE_LABEL:
 				if (ins.name != func.name)
-					msg ("  %s:\n", ins.name.c_str());
+					OUTPUT ("  %s:\n", ins.name.c_str());
 				break;
 			case INSTRUCTION_TYPE_PREPROCESSOR:
 			case INSTRUCTION_TYPE_INSTRUCTION:
@@ -1487,31 +1542,54 @@ generate_functions ()
 						if (instruction_set[i].type == ins.type &&
 							ins.name == instruction_set[i].instruction) {
 							HandlerResult result;
-							if (!instruction_set[i].check_operands (&ins)) {
+							if (!instruction_set[i].check_operands (ins)) {
 								ERROR ("Assertion : Wrong number of operands for instruction : %s\n", ins.name.c_str());
+								DEBUG("Wrong number of args : %s%s%s%s%s%s\n",
+									ins.name.c_str(),
+									ins.operands[0] != ""? (" " + ins.operands[0]).c_str() : "",
+									ins.operands[1] != ""? (" " + ins.operands[1]).c_str() : "",
+									ins.operands[2] != ""? (" " + ins.operands[2]).c_str() : "",
+									ins.operands[3] != ""? (" " + ins.operands[3]).c_str() : "",
+									ins.operands[4] != ""? (" " + ins.operands[4]).c_str() : "");
 								return false;
 							}
-							instruction_set[i].handler (&ins, &result);
+							instruction_set[i].handler (func, ins, &result);
 
-							msg ("%s%s%s\n",
-								ins.type == INSTRUCTION_TYPE_INSTRUCTION ? "  " : "",
-								result.c_code.c_str(),
-								inline_comment? ("; // " + inline_comment->name).c_str() : ";");
-							inline_comment = NULL;
+							if (result.c_code != "") {
+							  OUTPUT ("%s%s%s\n",
+									ins.type == INSTRUCTION_TYPE_INSTRUCTION ? "  " : "",
+									result.c_code.c_str(),
+									inline_comment.type != INSTRUCTION_TYPE_NONE? ("; // " + inline_comment.name).c_str() : ";");
+							} else if (inline_comment.type != INSTRUCTION_TYPE_NONE) {
+								OUTPUT("  // %s\n", inline_comment.name.c_str());
+							}
+							inline_comment.type = INSTRUCTION_TYPE_NONE;
 							break;
 						}
 					}
 					if (instruction_set[i].instruction == NULL) {
-						ERROR ("Error: Unknown instruction : %s\n", ins.name.c_str());
-						return false;
+						//ERROR ("Error: Unknown instruction : %s\n", ins.name.c_str());
+						//return false;
+						OUTPUT ("  /* Unknown instruction : %s%s%s%s%s%s */\n",
+							ins.name.c_str(),
+							ins.operands[0] != ""? (" " + ins.operands[0]).c_str() : "",
+							ins.operands[1] != ""? (" " + ins.operands[1]).c_str() : "",
+							ins.operands[2] != ""? (" " + ins.operands[2]).c_str() : "",
+							ins.operands[3] != ""? (" " + ins.operands[3]).c_str() : "",
+							ins.operands[4] != ""? (" " + ins.operands[4]).c_str() : "");
 					}
 				}
+				break;
+			case INSTRUCTION_TYPE_FLOW:
+				OUTPUT ("  goto %s;\n", ins.name.c_str());
 				break;
 			default:
 				ERROR ("Error: Unexpected instruction type\n");
 				return false;
 			}
 		}
+
+		OUTPUT ("}\n\n");
 	}
 	return true;
 }
@@ -1541,9 +1619,12 @@ void idaapi PluginMain(int param)
 	functions.clear();
 	parse_function (get_screen_ea(), true);
 
-    //msg("#include <stdint.h>\n\n");
-	//generate_prototypes ();
-	//generate_functions ();
+    OUTPUT ("#include <stdint.h>\n\n");
+	for (list<Function>::iterator it = functions.begin(); it != functions.end(); it++) {
+		generate_prototype (*it);
+		OUTPUT (";\n");
+	}
+	generate_functions ();
 
 	clock_t end=clock();
 	double diffms = ((double)(end-begin)*1000)/CLOCKS_PER_SEC;

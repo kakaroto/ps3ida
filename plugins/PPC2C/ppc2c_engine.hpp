@@ -82,6 +82,7 @@ public:
   operator string ();
 private:
   enum_register value;
+  string str;
 };
 
 typedef enum {
@@ -149,7 +150,7 @@ extern ConditionRegister cr[MAX_CR + 1];
   }
 
 string tostr(int);
-Register parse_pointer (const string &ptr, int *offset);
+Register parse_pointer (ea_t ea, int operand, ea_t &offset);
 
 
 #endif /* __PPC2C_HPP__ */

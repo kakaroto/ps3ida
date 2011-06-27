@@ -10,18 +10,31 @@
 
 #include "ppc2c_handlers.hpp"
 
+bool PPCAsm2C(ea_t ea, char* buff, int buffSize);
 void
-handle_preproc_set (Instruction *ins, HandlerResult *result)
+handle_ppc2c_instructions (Function &func, Instruction &ins, HandlerResult *result)
 {
+  char buffer[1024];
   result->out_reg = result->in_reg1 = result->in_reg2 = REGISTER_UNSET;
 
-  result->c_code = "#define " + ins->operands[0] + ins->operands[1];
+  if (PPCAsm2C(ins.address, buffer, sizeof(buffer)))
+    result->c_code = buffer;
+  else
+	result->c_code = " /* Error handling PPCAsm2C */";
 }
 
 void
-handle_stdu (Instruction *ins, HandlerResult *result)
+handle_preproc_set (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = ins->operands[0];
+  result->out_reg = result->in_reg1 = result->in_reg2 = REGISTER_UNSET;
+
+  result->c_code = "#define " + ins.operands[0] + ins.operands[1];
+}
+
+void
+handle_stdu (Function &func, Instruction &ins, HandlerResult *result)
+{
+  result->out_reg = ins.operands[0];
   result->in_reg1 = result->out_reg;
   result->in_reg2 = REGISTER_UNSET;
 
@@ -33,9 +46,9 @@ handle_stdu (Instruction *ins, HandlerResult *result)
 
 
 void
-handle_mflr (Instruction *ins, HandlerResult *result)
+handle_mflr (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = ins->operands[0];
+  result->out_reg = ins.operands[0];
   result->in_reg1 = REGISTER_LR;
   result->in_reg2 = REGISTER_UNSET;
 
@@ -43,20 +56,20 @@ handle_mflr (Instruction *ins, HandlerResult *result)
 }
 
 void
-handle_mr (Instruction *ins, HandlerResult *result)
+handle_mr (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = ins->operands[1];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
   result->in_reg2 = REGISTER_UNSET;
 
   result->c_code = string (result->out_reg) + " = " + string (result->in_reg1);
 }
 
 void
-handle_mfspr (Instruction *ins, HandlerResult *result)
+handle_mfspr (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = ins->operands[1];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
   result->in_reg2 = REGISTER_UNSET;
 
   if (result->in_reg1 != REGISTER_LR)
@@ -66,20 +79,20 @@ handle_mfspr (Instruction *ins, HandlerResult *result)
 }
 
 void
-handle_mtlr (Instruction *ins, HandlerResult *result)
+handle_mtlr (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = REGISTER_LR;
-  result->in_reg1 = ins->operands[0];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
   result->in_reg2 = REGISTER_UNSET;
 
-  result->c_code = "  LR = " + string (result->in_reg1);
+  result->c_code = "LR = " + string (result->in_reg1);
 }
 
 void
-handle_mtspr (Instruction *ins, HandlerResult *result)
+handle_mtspr (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = ins->operands[1];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
   result->in_reg2 = REGISTER_UNSET;
 
   if (result->in_reg1 == REGISTER_LR)
@@ -90,12 +103,12 @@ handle_mtspr (Instruction *ins, HandlerResult *result)
 
 
 void
-handle_std (Instruction *ins, HandlerResult *result)
+handle_std (Function &func, Instruction &ins, HandlerResult *result)
 {
-  int offset;
+  ea_t offset;
 
-  result->out_reg = parse_pointer (ins->operands[1], &offset);
-  result->in_reg1 = ins->operands[0];
+  result->out_reg = parse_pointer (ins.address, 1, offset);
+  result->in_reg1 = ins.operands[0];
   result->in_reg2 = REGISTER_UNSET;
 
   result->c_code = string (result->out_reg) + "[" + tostr(offset) + "] = " +
@@ -103,12 +116,12 @@ handle_std (Instruction *ins, HandlerResult *result)
 }
 
 void
-handle_lbz (Instruction *ins, HandlerResult *result)
+handle_lbz (Function &func, Instruction &ins, HandlerResult *result)
 {
-  int offset;
+  ea_t offset;
 
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = parse_pointer (ins->operands[1], &offset);
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = parse_pointer (ins.address, 1, offset);
   result->in_reg2 = REGISTER_UNSET;
 
   result->c_code = string (result->out_reg) + " = ((uint8_t *)" +
@@ -116,12 +129,12 @@ handle_lbz (Instruction *ins, HandlerResult *result)
 }
 
 void
-handle_lwz (Instruction *ins, HandlerResult *result)
+handle_lwz (Function &func, Instruction &ins, HandlerResult *result)
 {
-  int offset;
+  ea_t offset;
 
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = parse_pointer (ins->operands[1], &offset);
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = parse_pointer (ins.address, 1, offset);
   result->in_reg2 = REGISTER_UNSET;
 
   result->c_code = string (result->out_reg) + " = ((uint32_t *)";
@@ -133,122 +146,122 @@ handle_lwz (Instruction *ins, HandlerResult *result)
 }
 
 void
-handle_li (Instruction *ins, HandlerResult *result)
+handle_li (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = ins->operands[0];
+  result->out_reg = ins.operands[0];
   result->in_reg1 = REGISTER_UNSET;
   result->in_reg2 = REGISTER_UNSET;
 
-  result->c_code = string (result->out_reg) + " = " + ins->operands[1];
+  result->c_code = string (result->out_reg) + " = " + ins.operands[1];
 }
 
 void
-handle_lis (Instruction *ins, HandlerResult *result)
+handle_lis (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = ins->operands[0];
+  result->out_reg = ins.operands[0];
   result->in_reg1 = REGISTER_UNSET;
   result->in_reg2 = REGISTER_UNSET;
 
-  result->c_code = string(result->out_reg) + " = " + ins->operands[1] + " << 16";
+  result->c_code = string(result->out_reg) + " = " + ins.operands[1] + " << 16";
 }
 
 void
-handle_add (Instruction *ins, HandlerResult *result)
+handle_add (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = ins->operands[1];
-  result->in_reg2 = ins->operands[2];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
+  result->in_reg2 = ins.operands[2];
 
   result->c_code = string (result->out_reg) + " = " +
     string (result->in_reg1) + " + " + string (result->in_reg2);
 }
 
 void
-handle_addi (Instruction *ins, HandlerResult *result)
+handle_addi (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = ins->operands[1];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
   result->in_reg2 = REGISTER_UNSET;
 
   result->c_code = string (result->out_reg) + " = " +
-    string (result->in_reg1) + " + " + ins->operands[2];
+    string (result->in_reg1) + " + " + ins.operands[2];
 }
 
 void
-handle_addis (Instruction *ins, HandlerResult *result)
+handle_addis (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = ins->operands[1];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
   result->in_reg2 = REGISTER_UNSET;
 
   result->c_code = string (result->out_reg) + " = (" +
-    string (result->in_reg1) + " + " + ins->operands[2] + ") << 16";
+    string (result->in_reg1) + " + " + ins.operands[2] + ") << 16";
 }
 
 void
-handle_or (Instruction *ins, HandlerResult *result)
+handle_or (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = ins->operands[1];
-  result->in_reg2 = ins->operands[2];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
+  result->in_reg2 = ins.operands[2];
 
   result->c_code = string (result->out_reg) + " = " +
     string (result->in_reg1) + " | " + string (result->in_reg2);
 }
 
 void
-handle_ori (Instruction *ins, HandlerResult *result)
+handle_ori (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = ins->operands[1];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
   result->in_reg2 = REGISTER_UNSET;
 
   result->c_code = string (result->out_reg) + " = " +
-    string (result->in_reg1) + " | " + ins->operands[2];
+    string (result->in_reg1) + " | " + ins.operands[2];
 }
 
 void
-handle_oris (Instruction *ins, HandlerResult *result)
+handle_oris (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = ins->operands[1];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
   result->in_reg2 = REGISTER_UNSET;
 
   result->c_code = string (result->out_reg) + " = (" +
-    string (result->in_reg1) + " | " + ins->operands[2] + ") << 16";
+    string (result->in_reg1) + " | " + ins.operands[2] + ") << 16";
 }
 
 
 void
-handle_xor (Instruction *ins, HandlerResult *result)
+handle_xor (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = ins->operands[1];
-  result->in_reg2 = ins->operands[2];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
+  result->in_reg2 = ins.operands[2];
 
   result->c_code = string (result->out_reg) + " = " +
     string (result->in_reg1) + " ^ " + string (result->in_reg2);
 }
 
 void
-handle_and (Instruction *ins, HandlerResult *result)
+handle_and (Function &func, Instruction &ins, HandlerResult *result)
 {
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = ins->operands[1];
-  result->in_reg2 = ins->operands[2];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
+  result->in_reg2 = ins.operands[2];
 
   result->c_code = string (result->out_reg) + " = " +
     string (result->in_reg1) + " & " + string (result->in_reg2);
 }
 
 void
-handle_cmpw (Instruction *ins, HandlerResult *result)
+handle_cmpw (Function &func, Instruction &ins, HandlerResult *result)
 {
   ConditionRegister *crX;
 
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = ins->operands[1];
-  result->in_reg2 = ins->operands[2];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
+  result->in_reg2 = ins.operands[2];
   result->c_code = "";
 
   assert (result->out_reg >= REGISTER_CR0 && result->out_reg <= REGISTER_CR7);
@@ -263,13 +276,13 @@ handle_cmpw (Instruction *ins, HandlerResult *result)
 }
 
 void
-handle_cmplw (Instruction *ins, HandlerResult *result)
+handle_cmplw (Function &func, Instruction &ins, HandlerResult *result)
 {
   ConditionRegister *crX;
 
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = ins->operands[1];
-  result->in_reg2 = ins->operands[2];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
+  result->in_reg2 = ins.operands[2];
   result->c_code = "";
 
   assert (result->out_reg >= REGISTER_CR0 && result->out_reg <= REGISTER_CR7);
@@ -284,12 +297,12 @@ handle_cmplw (Instruction *ins, HandlerResult *result)
 }
 
 void
-handle_cmpwi (Instruction *ins, HandlerResult *result)
+handle_cmpwi (Function &func, Instruction &ins, HandlerResult *result)
 {
   ConditionRegister *crX;
 
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = ins->operands[1];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
   result->in_reg2 = REGISTER_UNSET;
   result->c_code = "";
 
@@ -301,16 +314,16 @@ handle_cmpwi (Instruction *ins, HandlerResult *result)
   crX->size = REGISTER_SIZE_WORD;
   crX->immediate = true;
   crX->_signed = true;
-  crX->cmp_imm = strtol (ins->operands[2].c_str(), NULL, 0);
+  crX->cmp_imm = strtol (ins.operands[2].c_str(), NULL, 0);
 }
 
 void
-handle_cmplwi (Instruction *ins, HandlerResult *result)
+handle_cmplwi (Function &func, Instruction &ins, HandlerResult *result)
 {
   ConditionRegister *crX;
 
-  result->out_reg = ins->operands[0];
-  result->in_reg1 = ins->operands[1];
+  result->out_reg = ins.operands[0];
+  result->in_reg1 = ins.operands[1];
   result->in_reg2 = REGISTER_UNSET;
   result->c_code = "";
 
@@ -322,7 +335,7 @@ handle_cmplwi (Instruction *ins, HandlerResult *result)
   crX->size = REGISTER_SIZE_WORD;
   crX->immediate = true;
   crX->_signed = false;
-  crX->cmp_imm = strtol (ins->operands[2].c_str(), NULL, 0);
+  crX->cmp_imm = strtol (ins.operands[2].c_str(), NULL, 0);
 }
 
 
