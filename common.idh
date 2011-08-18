@@ -71,6 +71,39 @@ static CreateOpd (toc_addr) {
   return ea;
 }
 
+
+static CreateOpd64Structure(void) {
+  auto id;
+
+  id = CreateStructure("OPD64_s");
+  AddStrucMember(id, "sub", 0x00, FF_QWRD | FF_0OFF, 0, 8);
+  AddStrucMember(id, "toc", 0x08, FF_QWRD | FF_0OFF, 0, 8);
+  AddStrucMember(id, "opd32_sub", 0x10, FF_DWRD | FF_0OFF, 0, 4);
+  AddStrucMember(id, "opd32_toc", 0x14, FF_DWRD | FF_0OFF, 0, 4);
+
+  return 1;
+}
+
+
+static CreateOpd64 (start, end) {
+  auto ea, func;
+
+  CreateOpd64Structure();
+
+  Message("Defining OPD section entries\n");
+
+  ea = start;
+  while (ea != BADADDR && ea < end) {
+    MakeUnknown(ea, 0x18, DOUNK_SIMPLE);
+    MakeStructEx (ea, 0x18, "OPD64_s");
+    func = Qword(ea);
+    MakeFunction(func, BADADDR);
+    ea = ea + 0x18;
+  }
+
+  return ea;
+}
+
 static CreateExportStructure(void) {
   auto id;
 
