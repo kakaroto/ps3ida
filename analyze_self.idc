@@ -65,12 +65,12 @@ static FindImportsExports() {
     }
   }
 
-  if (export_start == 0)
-    return;
-
-  export_end = SegEnd(export_start);
-  RenameSeg(export_start, "Exports");
-  Message("Found Export Table: 0x%X\n", export_start);
+  if (export_start != 0) {
+    export_end = SegEnd(export_start);
+    RenameSeg(export_start, "Exports");
+    Message("Found Export Table: 0x%X\n", export_start);
+    CreateExports(export_start, export_end);
+  }
 
   for (seg = export_start; import_start == 0 && NextSeg(seg) != seg; seg = NextSeg(seg)) {
     if ((SegEnd(seg) - SegStart(seg)) % 0x2C != 0)
@@ -86,15 +86,13 @@ static FindImportsExports() {
     }
   }
 
-  if (import_start == 0)
-    return;
+  if (import_start != 0) {
+    import_end = SegEnd(import_start);
+    RenameSeg(import_start, "Imports");
+    Message("Found Import Table: 0x%X\n", import_start);
+    CreateImports(import_start, import_end);
+  }
 
-  import_end = SegEnd(import_start);
-  RenameSeg(import_start, "Imports");
-  Message("Found Import Table: 0x%X\n", import_start);
-
-  CreateExports(export_start, export_end);
-  CreateImports(import_start, import_end);
 
   return ea;
 }
