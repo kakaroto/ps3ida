@@ -16,7 +16,7 @@ static FindOpd() {
   found_seg = 0;
 
   for (seg = FirstSeg(); found_seg == 0 && NextSeg(seg) != seg; seg = NextSeg(seg)) {
-    for (ea = SegStart(seg); ea + 8 < SegEnd(seg); ea = ea + 8) {
+    for (ea = SegStart(seg); ea + 8 < SegEnd(seg) && ea < SegStart(seg) + 0x1000; ea = ea + 8) {
       toc = Dword(ea + 0x04);
       next_toc = Dword(ea + 0x0C);
       if (toc == 0  || toc == 0xFFFFFFFF || toc != next_toc) {
