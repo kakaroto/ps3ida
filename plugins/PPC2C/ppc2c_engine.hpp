@@ -11,8 +11,13 @@
 #ifndef __PPC2C_HPP__
 #define __PPC2C_HPP__
 
+#ifdef NO_OBSOLETE_FUNCS
+#undef NO_OBSOLETE_FUNCS
+#endif
+
 #include <ida.hpp>
 #include <idp.hpp>
+#include <ua.hpp>
 
 #include <stdio.h>
 #include <stdlib.h>

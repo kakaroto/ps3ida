@@ -18,6 +18,10 @@
  */
 
 
+#ifdef NO_OBSOLETE_FUNCS
+#undef NO_OBSOLETE_FUNCS
+#endif
+
 #include <ida.hpp>
 #include <idp.hpp>
 #include <name.hpp>
@@ -25,6 +29,7 @@
 #include <loader.hpp>
 #include <kernwin.hpp>
 #include <auto.hpp>
+#include <ua.hpp>
 
 #include <time.h>
 #include <list>
