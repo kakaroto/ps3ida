@@ -18,7 +18,6 @@ static FindOpd() {
   for (seg = FirstSeg(); found_seg == 0 && NextSeg(seg) != seg; seg = NextSeg(seg)) {
     if (SegName(seg) == ".opd")
       found_seg = seg;
-    continue;
     for (ea = SegStart(seg) + 0x30; ea + 0x18 < SegEnd(seg); ea = ea + 0x18) {
       toc = Qword(ea + 0x08);
       next_toc = Qword(ea + 0x20);
